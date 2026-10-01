@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Rater</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #667085;
+    --border: #e2e5ea; --accent: #2f5bea; --good: #17803d; --ok: #b26a00; --bad: #c0362c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1a1d24; --text: #eceef2; --muted: #98a1b3;
+      --border: #2b303b; --accent: #7c9cff; --good: #4cc47a; --ok: #f0b35a; --bad: #f2776c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  }
+  .fields { display: flex; gap: 12px; align-items: end; }
+  .fields > div { flex: 1; }
+  @media (max-width: 620px) { .fields { flex-direction: column; align-items: stretch; } }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, textarea {
+    width: 100%; padding: 9px 11px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  textarea { resize: vertical; min-height: 64px; display: block; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab, .secondary {
+    padding: 7px 14px; font-weight: 500; color: var(--text);
+    background: transparent; border: 1px solid var(--border);
+  }
+  .tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .item { display: grid; gap: 8px; margin-bottom: 16px; }
+  .item-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+  .remove { padding: 2px 10px; font-size: 13px; }
+  #add { margin-bottom: 20px; }
+  button {
+    padding: 10px 22px; font: inherit; font-weight: 600; color: #fff;
+    background: var(--accent); border: 0; border-radius: 8px; cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  #summary { display: flex; align-items: center; gap: 20px; }
+  #score { font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  #score small { font-size: 20px; font-weight: 500; color: var(--muted); }
+  #verdict { font-size: 18px; font-weight: 700; padding: 4px 14px; border-radius: 999px; border: 2px solid currentColor; }
+  #status { color: var(--muted); }
+  .good { color: var(--good); } .ok { color: var(--ok); } .bad { color: var(--bad); }
+  details { border-top: 1px solid var(--border); padding: 12px 0; }
+  details:first-child { border-top: 0; padding-top: 0; }
+  details:last-child { padding-bottom: 0; }
+  summary { display: flex; gap: 12px; cursor: pointer; list-style: none; align-items: baseline; }
+  summary::-webkit-details-marker { display: none; }
+  .points { flex: 0 0 52px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .category { flex: 0 0 110px; font-weight: 600; text-transform: capitalize; }
+  .reason { color: var(--muted); }
+  .body { margin: 10px 0 0 64px; font-size: 14px; }
+  .body h3 { margin: 10px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 620px) { summary { flex-wrap: wrap; } .body { margin-left: 0; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Model Rater</h1>
+  <p class="sub">Scores answers with a judge model on OpenRouter.</p>
+
+  <div class="tabs">
+    <button type="button" class="tab active" data-mode="answers">My questions &amp; answers</button>
+    <button type="button" class="tab" data-mode="model">Test a model</button>
+  </div>
+
+  <form id="form" class="card">
+    <div id="answersMode">
+      <div id="items"></div>
+      <button type="button" id="add" class="secondary">+ Add question</button>
+    </div>
+    <div class="fields">
+      <div id="modelField" hidden>
+        <label for="model">Model to rate</label>
+        <input id="model" value="typesafe/jev-router">
+      </div>
+      <div>
+        <label for="judge">Judge model</label>
+        <input id="judge" value="typesafe/jev-router">
+      </div>
+      <button id="run">Run</button>
+    </div>
+  </form>
+
+  <div class="card" id="summaryCard" hidden>
+    <div id="summary">
+      <div id="score" hidden></div>
+      <div id="verdict" hidden></div>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <div class="card" id="resultsCard" hidden>
+    <div id="results"></div>
+  </div>
+</main>
+
+<script>
+const form = document.getElementById("form");
+const runButton = document.getElementById("run");
+const summaryCard = document.getElementById("summaryCard");
+const resultsCard = document.getElementById("resultsCard");
+const scoreEl = document.getElementById("score");
+const verdictEl = document.getElementById("verdict");
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+
+const itemsEl = document.getElementById("items");
+const answersMode = document.getElementById("answersMode");
+const modelField = document.getElementById("modelField");
+
+let mode = "answers";
+let total = 0;
+let finished = 0;
+
+function renumberItems() {
+  itemsEl.querySelectorAll(".item").forEach((item, index) => {
+    item.querySelector(".number").textContent = `Question ${index + 1}`;
+    item.querySelector(".remove").hidden = itemsEl.children.length === 1;
+  });
+}
+
+function addItem() {
+  const item = element("div", "item");
+  const head = element("div", "item-head");
+  const remove = element("button", "secondary remove", "Remove");
+  remove.type = "button";
+  remove.addEventListener("click", () => { item.remove(); renumberItems(); });
+  head.append(element("span", "number"), remove);
+  const question = element("textarea", "question");
+  question.placeholder = "Question";
+  const answer = element("textarea", "answer");
+  answer.placeholder = "Answer to be scored";
+  item.append(head, question, answer);
+  itemsEl.append(item);
+  renumberItems();
+}
+
+document.getElementById("add").addEventListener("click", addItem);
+
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    mode = tab.dataset.mode;
+    document.querySelectorAll(".tab").forEach((other) => other.classList.toggle("active", other === tab));
+    answersMode.hidden = mode !== "answers";
+    modelField.hidden = mode !== "model";
+  });
+}
+
+function scoreClass(points, max) {
+  const percent = (points / max) * 100;
+  return percent >= 75 ? "good" : percent >= 50 ? "ok" : "bad";
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function addResult(result) {
+  const failed = result.score === null;
+  const row = element("details");
+  const head = element("summary");
+  head.append(
+    element("span", "points " + (failed ? "bad" : scoreClass(result.score, 10)), failed ? "ERR" : result.score + "/10"),
+    element("span", "category", result.category),
+    element("span", "reason", result.reason)
+  );
+  const body = element("div", "body");
+  body.append(
+    element("h3", "", "Question"), element("p", "", result.prompt),
+    element("h3", "", "Answer"), element("p", "", result.answer || "(no answer)")
+  );
+  if (result.expected) {
+    body.append(element("h3", "", "Expected"), element("p", "", result.expected));
+  }
+  row.append(head, body);
+  resultsEl.append(row);
+  resultsCard.hidden = false;
+}
+
+function handle(event) {
+  if (event.type === "start") {
+    total = event.total;
+    statusEl.textContent = `Running 0 of ${total} tests…`;
+  } else if (event.type === "result") {
+    finished++;
+    addResult(event.result);
+    statusEl.textContent = `Running ${finished} of ${total} tests…`;
+  } else if (event.type === "done") {
+    if (event.score === null) {
+      statusEl.textContent = "No test could be graded, so there is no score. Open a row to see the error.";
+      return;
+    }
+    const className = event.verdict.toLowerCase();
+    scoreEl.className = className;
+    scoreEl.innerHTML = "";
+    scoreEl.append(String(event.score), element("small", "", "/100"));
+    verdictEl.className = className;
+    verdictEl.textContent = event.verdict;
+    scoreEl.hidden = verdictEl.hidden = false;
+    statusEl.textContent = event.failed > 0
+      ? `${event.failed} test(s) failed and were left out of the score.`
+      : "";
+  } else if (event.type === "error") {
+    statusEl.textContent = event.message;
+  }
+}
+
+form.addEventListener("submit", async (submitEvent) => {
+  submitEvent.preventDefault();
+  runButton.disabled = true;
+  runButton.textContent = "Running…";
+  total = finished = 0;
+  resultsEl.innerHTML = "";
+  resultsCard.hidden = true;
+  scoreEl.hidden = verdictEl.hidden = true;
+  summaryCard.hidden = false;
+  statusEl.textContent = "Starting…";
+
+  const payload = { judge: document.getElementById("judge").value };
+  if (mode === "answers") {
+    payload.items = [...itemsEl.querySelectorAll(".item")].map((item) => ({
+      question: item.querySelector(".question").value,
+      answer: item.querySelector(".answer").value,
+    }));
+  } else {
+    payload.model = document.getElementById("model").value;
+  }
+
+  try {
+    const response = await fetch("/api/rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) if (line.trim()) handle(JSON.parse(line));
+    }
+  } catch (error) {
+    statusEl.textContent = "Could not reach the server: " + error.message;
+  }
+
+  runButton.disabled = false;
+  runButton.textContent = "Run";
+});
+
+addItem();
+</script>
+</body>
+</html>

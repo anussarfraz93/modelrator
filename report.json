@@ -1,0 +1,22 @@
+{
+  "judge": "typesafe/jev-router",
+  "score": 100,
+  "verdict": "GOOD",
+  "failed": 0,
+  "results": [
+    {
+      "category": "Q1",
+      "prompt": "What is the capital of France?",
+      "answer": "Paris",
+      "score": 10,
+      "reason": "Paris is the capital of France."
+    },
+    {
+      "category": "Q2",
+      "prompt": "What is 7 x 8?",
+      "answer": "56",
+      "score": 10,
+      "reason": "The answer correctly states that 7 × 8 = 56."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "functions": {
+    "api/rate.js": {
+      "maxDuration": 60,
+      "includeFiles": "prompts.json"
+    }
+  }
+}

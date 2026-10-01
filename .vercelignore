@@ -1,0 +1,4 @@
+.env
+.claude
+report.json
+server.js
